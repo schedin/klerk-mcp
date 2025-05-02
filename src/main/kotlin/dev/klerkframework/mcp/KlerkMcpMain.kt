@@ -1,13 +1,13 @@
 package dev.klerkframework.mcp
 
+import io.ktor.server.routing.*
 import io.modelcontextprotocol.kotlin.sdk.Implementation
 import io.modelcontextprotocol.kotlin.sdk.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcp
-import io.modelcontextprotocol.kotlin.sdk.server.mcp
 
-fun registerMcp() {
+fun Routing.configureMcpServer() {
     mcp {
         Server(
             serverInfo = Implementation(
@@ -23,4 +23,3 @@ fun registerMcp() {
         )
     }
 }
-
