@@ -15,6 +15,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${property("coroutines_version")}")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${property("serialization_version")}")
+    implementation("io.modelcontextprotocol:kotlin-sdk:${property("mcp_sdk_verison")}") // MCP SDK
 
     // Logging
     implementation("org.slf4j:slf4j-api:${property("slf4j_version")}")
