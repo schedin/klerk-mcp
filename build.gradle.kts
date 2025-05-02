@@ -32,52 +32,6 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
-
-tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += "-Xjsr305=strict"
-    }
-}
-
-java {
-    withSourcesJar()
-    withJavadocJar()
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
-
-            pom {
-                name.set("klerk-mcp")
-                description.set("A Klerk plugin to expose a Klerk-based application as a Model Context Protocol (MCP) API")
-                url.set("https://github.com/klerk-framework/klerk-mcp")
-
-                licenses {
-                    license {
-                        name.set("The Apache License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                    }
-                }
-
-                developers {
-                    developer {
-                        id.set("klerk-framework")
-                        name.set("Klerk Framework Team")
-                        email.set("info@klerk-framework.com")
-                    }
-                }
-
-                scm {
-                    connection.set("scm:git:git://github.com/klerk-framework/klerk-mcp.git")
-                    developerConnection.set("scm:git:ssh://github.com/klerk-framework/klerk-mcp.git")
-                    url.set("https://github.com/klerk-framework/klerk-mcp")
-                }
-            }
-        }
-    }
+kotlin {
+    jvmToolchain(17)
 }
