@@ -16,6 +16,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${property("coroutines_version")}")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${property("serialization_version")}")
 
+    implementation("io.ktor:ktor-server-core-jvm:${property("ktor_version")}")
+
     implementation("io.modelcontextprotocol:kotlin-sdk:${property("mcp_sdk_version")}") // MCP SDK
 
     // Logging
