@@ -29,7 +29,7 @@ fun getMcpServer(): Server {
         // Add a tool
         this.addTool(
             name = "kotlin-sdk-tool",
-            description = "A test tool",
+            description = "My test tool",
             inputSchema = Tool.Input()
         ) { request ->
             CallToolResult(
