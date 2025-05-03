@@ -1,25 +1,39 @@
 package dev.klerkframework.mcp
 
 import io.ktor.server.routing.*
-import io.modelcontextprotocol.kotlin.sdk.Implementation
-import io.modelcontextprotocol.kotlin.sdk.ServerCapabilities
+import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcp
 
-fun Routing.configureMcpServer() {
+fun configureMcpServer(): Routing.() -> Unit = {
     mcp {
-        Server(
-            serverInfo = Implementation(
-                name = "example-sse-server",
-                version = "1.0.0"
-            ),
-            options = ServerOptions(
-                capabilities = ServerCapabilities(
-                    prompts = ServerCapabilities.Prompts(listChanged = null),
-                    resources = ServerCapabilities.Resources(subscribe = null, listChanged = null)
-                )
+        getMcpServer()
+    }
+}
+
+fun getMcpServer(): Server {
+    return Server(
+        serverInfo = Implementation(
+            name = "example-sse-server",
+            version = "1.0.0"
+        ),
+        options = ServerOptions(
+            capabilities = ServerCapabilities(
+                prompts = ServerCapabilities.Prompts(listChanged = null),
+                resources = ServerCapabilities.Resources(subscribe = null, listChanged = null)
             )
         )
+    ).apply {
+        // Add a tool
+        this.addTool(
+            name = "kotlin-sdk-tool",
+            description = "A test tool",
+            inputSchema = Tool.Input()
+        ) { request ->
+            CallToolResult(
+                content = listOf(TextContent("Hello, world!"))
+            )
+        }
     }
 }
