@@ -21,7 +21,8 @@ fun getMcpServer(): Server {
         options = ServerOptions(
             capabilities = ServerCapabilities(
                 prompts = ServerCapabilities.Prompts(listChanged = null),
-                resources = ServerCapabilities.Resources(subscribe = null, listChanged = null)
+                resources = ServerCapabilities.Resources(subscribe = null, listChanged = null),
+                tools = ServerCapabilities.Tools(listChanged = null),
             )
         )
     ).apply {
