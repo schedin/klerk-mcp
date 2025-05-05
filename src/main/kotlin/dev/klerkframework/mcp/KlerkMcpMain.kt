@@ -1,5 +1,7 @@
 package dev.klerkframework.mcp
 
+import dev.klerkframework.klerk.Klerk
+import dev.klerkframework.klerk.KlerkContext
 import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
@@ -10,7 +12,7 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 //    }
 //}
 
-fun createMcpServer(): Server {
+fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
     println("Test1")
     return Server(
         serverInfo = Implementation(
