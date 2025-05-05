@@ -1,9 +1,16 @@
 package dev.klerkframework.mcp
 
-import dev.klerkframework.klerk.Klerk
-import dev.klerkframework.klerk.KlerkContext
+import dev.klerkframework.klerk.*
+import dev.klerkframework.klerk.CommandResult.Failure
+import dev.klerkframework.klerk.CommandResult.Success
+import dev.klerkframework.klerk.command.Command
+import dev.klerkframework.klerk.command.CommandToken
+import dev.klerkframework.klerk.command.ProcessingOptions
 import dev.klerkframework.klerk.misc.PropertyType
 import dev.klerkframework.klerk.misc.extractNameFromFunction
+import dev.klerkframework.klerk.statemachine.StateMachine
+import io.ktor.http.*
+import io.ktor.server.response.*
 import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
@@ -40,7 +47,6 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
     )
 
     for (model in klerk.config.managedModels) {
-//        println(model)
         val stateMachine = model.stateMachine
 
         stateMachine.getExternalEvents().forEach { eventReference ->
@@ -73,15 +79,7 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
                 description = "Executes the ${eventReference.eventName} command on the data ${model.kClass.simpleName}",
                 inputSchema = inputSchema,
             ) { request ->
-                val event = klerk.config.getEvent(eventReference)
-                print(event)
-                print(stateMachine)
-
-
-                println("Request = $request")
-                CallToolResult(
-                    content = listOf(TextContent("Hello, world!"))
-                )
+                handleToolRequest(stateMachine, klerk, klerk.config.getEvent(eventReference), request)
             }
        }
         break
@@ -110,4 +108,55 @@ fun toToolName(eventName: String, modelName: String): String {
             .lowercase()
     }
     return "${toSnakeCase(modelName)}_${toSnakeCase(eventName)}"
+}
+
+private fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handleToolRequest(
+    stateMachine: StateMachine<T, ModelStates, C, V>,
+    klerk: Klerk<C, V>,
+    event: Event<Any, Any?>,
+    request: CallToolRequest
+): CallToolResult {
+    print(event)
+    print(stateMachine)
+
+    val parametersClass = when(event) {
+        is VoidEventWithParameters -> event.parametersClass
+        is InstanceEventWithParameters -> event.parametersClass
+        else -> null
+    }
+
+    if (parametersClass != null) {
+        println("parametersClass = $parametersClass")
+    }
+
+
+//    val command = Command<T, P>(
+//        event = CreateTodo,
+//        model = null,
+//        params = CreateTodoParams(
+//            title = TodoTitle(params.title),
+//            description = TodoDescription(params.description),
+//            username = user.name,
+//            priority = TodoPriority(params.priority),
+//        ),
+//    )
+
+//    when(val result = klerk.handle(command, context, ProcessingOptions(CommandToken.simple()))) {
+//        is Failure -> {
+//            call.respond(HttpStatusCode.BadRequest, result.problem.toString())
+//        }
+//        is Success -> {
+//            val createdTodo = klerk.read(context) {
+//                get(result.primaryModel!!)
+//            }
+////            call.respond(HttpStatusCode.Created, toTodoResponse(createdTodo, user.name.value))
+//            CallToolResult(
+//                content = listOf(TextContent("Hello, world!"))
+//            )
+//        }
+//    }
+
+    return CallToolResult(
+        content = listOf(TextContent("Hello, world!"))
+    )
 }
