@@ -155,13 +155,13 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
                     // Create an instance of the DataContainer subclass with the value from the request
                     val containerInstance = when {
                         // Handle different primitive types
-                        requestParamValue is String && paramType.simpleName?.contains("String", ignoreCase = true) == true -> {
+                        requestParamValue is JsonPrimitive && paramType.simpleName?.contains("String", ignoreCase = true) == true -> {
                             containerConstructor.call(requestParamValue)
                         }
-                        requestParamValue is Number && paramType.simpleName?.contains("Int", ignoreCase = true) == true -> {
-                            containerConstructor.call(requestParamValue.toInt())
+                        requestParamValue is JsonPrimitive && paramType.simpleName?.contains("Int", ignoreCase = true) == true -> {
+                            containerConstructor.call(requestParamValue.toString().toInt())
                         }
-                        requestParamValue is Boolean && paramType.simpleName?.contains("Boolean", ignoreCase = true) == true -> {
+                        requestParamValue is JsonPrimitive && paramType.simpleName?.contains("Boolean", ignoreCase = true) == true -> {
                             containerConstructor.call(requestParamValue)
                         }
                         // Add more type conversions as needed
