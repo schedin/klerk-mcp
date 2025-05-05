@@ -29,7 +29,10 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("dev.klerkframework.mcp.KlerkMcpMain")
 
-fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
+fun <C : KlerkContext, V> createMcpServer(
+    klerk: Klerk<C, V>,
+    contextProvider: suspend () -> C,
+): Server {
     logger.info("Creating MCP server")
 
     val server = Server(
@@ -79,7 +82,7 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
                 description = "Executes the ${eventReference.eventName} command on the data ${model.kClass.simpleName}",
                 inputSchema = inputSchema,
             ) { request ->
-                handleToolRequest(stateMachine, klerk, klerk.config.getEvent(eventReference), request)
+                handleToolRequest(stateMachine, klerk, klerk.config.getEvent(eventReference), contextProvider, request)
             }
        }
         break
@@ -114,7 +117,8 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
     stateMachine: StateMachine<T, ModelStates, C, V>,
     klerk: Klerk<C, V>,
     event: Event<Any, Any?>,
-    request: CallToolRequest
+    contextProvider: suspend () -> C,
+    request: CallToolRequest,
 ): CallToolResult {
     logger.debug("Handling tool request for event: {}", event)
     logger.debug("State machine: {}", stateMachine)
@@ -209,7 +213,7 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
             val paramsInstance = constructor.callBy(paramValues)
 
             // Create a context for the command
-            val context = klerk.config.contextProvider!!(SystemIdentity) // TODO better authentication is needed
+            val context = contextProvider()
 
             // Create and execute the command
             @Suppress("UNCHECKED_CAST")
