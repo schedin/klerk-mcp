@@ -53,9 +53,9 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
 //            val inputSchema
 //            val parameters = klerk.config.getParameters(eventReference)
 
-            val inputSchema: Tool.Input = klerk.config.getParameters(eventReference).let { parameters ->
-                val required = parameters.requiredParameters?.map { it.name }
-                    .takeUnless { it.isNullOrEmpty() }
+            val inputSchema: Tool.Input = klerk.config.getParameters(eventReference)?.let { parameters ->
+                val required = parameters.requiredParameters.map { it.name }
+                    .takeUnless { it.isEmpty() }
                 val properties = buildJsonObject {
                     parameters.all.forEach { eventParameter ->
                         putJsonObject(eventParameter.name) {
@@ -64,15 +64,20 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
                         }
                     }
                 }
-                println(properties)
+                logger.debug("Tool input properties: {}", properties)
                 Tool.Input(properties, required)
-            } ?. Tool.Input()
+            } ?: Tool.Input()
 
             server.addTool(
                 name = toToolName(eventReference.eventName, model.kClass.simpleName!!),
                 description = "Executes the ${eventReference.eventName} command on the data ${model.kClass.simpleName}",
                 inputSchema = inputSchema,
             ) { request ->
+                val event = klerk.config.getEvent(eventReference)
+                print(event)
+                print(stateMachine)
+
+
                 println("Request = $request")
                 CallToolResult(
                     content = listOf(TextContent("Hello, world!"))
@@ -80,25 +85,6 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
             }
        }
         break
-
-//        stateMachine.instanceStates.forEach { state ->
-//            println(state.name)
-//            state.onEventBlocks.forEach { eventBlock ->
-//                println(eventBlock.first.name)
-//                eventBlock.second.executables
-//                    .filterIsInstance<InstanceEventTransitionWhen<*, *, *, *, *>>()
-//                    .forEach { transition ->
-//                        transition.branches.forEach { branch ->
-//                            result += "${toVariable(state.name)} --> ${toVariable(branch.value.name)}: ${
-//                                extractNameFromFunction(
-//                                    branch.key
-//                                )
-//                            }\n"
-//                        }
-//                    }
-//            }
-//        }
-
     }
 
     return server
