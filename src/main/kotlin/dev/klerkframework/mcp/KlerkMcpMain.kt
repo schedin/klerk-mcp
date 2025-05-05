@@ -1,18 +1,17 @@
 package dev.klerkframework.mcp
 
-import io.ktor.server.routing.*
 import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
-import io.modelcontextprotocol.kotlin.sdk.server.mcp
 
-fun configureMcpServer(): Routing.() -> Unit = {
-    mcp {
-        getMcpServer()
-    }
-}
+//fun configureMcpServer(): Routing.() -> Unit = {
+//    mcp {
+//        getMcpServer()
+//    }
+//}
 
-fun getMcpServer(): Server {
+fun createMcpServer(): Server {
+    println("Test1")
     return Server(
         serverInfo = Implementation(
             name = "example-sse-server",
