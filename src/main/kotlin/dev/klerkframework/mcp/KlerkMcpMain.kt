@@ -2,11 +2,16 @@ package dev.klerkframework.mcp
 
 import dev.klerkframework.klerk.Klerk
 import dev.klerkframework.klerk.KlerkContext
+import dev.klerkframework.klerk.misc.PropertyType
 import dev.klerkframework.klerk.misc.extractNameFromFunction
 import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.putJsonObject
+import io.modelcontextprotocol.kotlin.sdk.Tool
 import org.slf4j.LoggerFactory
 
 //fun configureMcpServer(): Routing.() -> Unit = {
@@ -41,37 +46,39 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
         stateMachine.getExternalEvents().forEach { eventReference ->
             if (eventReference.eventName != "CreateTodo") {
                 return@forEach
-
             }
-
-
             println("${model.kClass.simpleName}: ${eventReference.eventName}")
-            val event = klerk.config.getEvent(eventReference)
-            val parameters = klerk.config.getParameters(eventReference)
-            if (parameters != null) {
-                val properties: JsonObject
-                val required = klerk.config.getParameters(eventReference)?.requiredParameters?.map { it.name }
+
+//            val event = klerk.config.getEvent(eventReference)
+//            val inputSchema
+//            val parameters = klerk.config.getParameters(eventReference)
+
+            val inputSchema: Tool.Input = klerk.config.getParameters(eventReference).let { parameters ->
+                val required = parameters.requiredParameters?.map { it.name }
                     .takeUnless { it.isNullOrEmpty() }
-                val optionalParameters = parameters.optionalParameters
-                for (parameter in optionalParameters) {
-                    println("Optional parameter = ${parameter.name}")
+                val properties = buildJsonObject {
+                    parameters.all.forEach { eventParameter ->
+                        putJsonObject(eventParameter.name) {
+                            put("type", JsonPrimitive(propertyTypeToJsonType(eventParameter.type)))
+                            put("description", JsonPrimitive("Value for the ${eventParameter.valueClass.simpleName}"))
+                        }
+                    }
                 }
-//                println("requiredParameters = $requiredParameters")
-//                println("optionalParameters = $optionalParameters")
-            }
+                println(properties)
+                Tool.Input(properties, required)
+            } ?. Tool.Input()
 
             server.addTool(
                 name = toToolName(eventReference.eventName, model.kClass.simpleName!!),
                 description = "Executes the ${eventReference.eventName} command on the data ${model.kClass.simpleName}",
-//                inputSchema = Tool.Input(properties, required),
+                inputSchema = inputSchema,
             ) { request ->
                 println("Request = $request")
                 CallToolResult(
                     content = listOf(TextContent("Hello, world!"))
                 )
             }
-
-        }
+       }
         break
 
 //        stateMachine.instanceStates.forEach { state ->
@@ -94,23 +101,23 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
 
     }
 
-
     return server
-//        .apply {
-//        // Add a tool
-//        this.addTool(
-//            name = "kotlin-sdk-tool",
-//            description = "My test tool",
-//            inputSchema = Tool.Input()
-//        ) { request ->
-//            CallToolResult(
-//                content = listOf(TextContent("Hello, world!"))
-//            )
-//        }
-//    }
 }
 
-private fun toToolName(eventName: String, modelName: String): String {
+fun propertyTypeToJsonType(propertyType: PropertyType?): String {
+    return when (propertyType) {
+        PropertyType.String ->  "string"
+        PropertyType.Int ->     "number"
+        PropertyType.Long ->    "number"
+        PropertyType.Float ->   "number"
+        PropertyType.Boolean -> "boolean"
+        PropertyType.Ref ->     throw IllegalArgumentException("PropertyType.Ref not yet implemented")
+        PropertyType.Enum ->    throw IllegalArgumentException("PropertyType.Enum not yet implemented")
+        null -> throw IllegalArgumentException("PropertyType was null!?")
+    }
+}
+
+fun toToolName(eventName: String, modelName: String): String {
      fun toSnakeCase(camelCase: String): String {
         return camelCase.replace(Regex("([a-z])([A-Z])"), "$1_$2")
             .replace(Regex("([A-Z])([A-Z][a-z])"), "$1_$2")
