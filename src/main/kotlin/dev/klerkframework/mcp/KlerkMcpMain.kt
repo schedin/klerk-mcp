@@ -41,33 +41,29 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
         stateMachine.getExternalEvents().forEach { eventReference ->
             if (eventReference.eventName != "CreateTodo") {
                 return@forEach
-            }
 
-            val properties: JsonObject
-            val required: List<String>?
+            }
 
 
             println("${model.kClass.simpleName}: ${eventReference.eventName}")
             val event = klerk.config.getEvent(eventReference)
             val parameters = klerk.config.getParameters(eventReference)
             if (parameters != null) {
-                val requiredParameters = parameters.requiredParameters
-                for (parameter in requiredParameters) {
-                    println("Required parameter = ${parameter.name}")
-                }
+                val properties: JsonObject
+                val required = klerk.config.getParameters(eventReference)?.requiredParameters?.map { it.name }
+                    .takeUnless { it.isNullOrEmpty() }
                 val optionalParameters = parameters.optionalParameters
                 for (parameter in optionalParameters) {
                     println("Optional parameter = ${parameter.name}")
                 }
-
 //                println("requiredParameters = $requiredParameters")
 //                println("optionalParameters = $optionalParameters")
             }
 
             server.addTool(
-                name = "${eventReference.eventName}",
-                description = "Executes the ${eventReference.eventName} on the data ${model.kClass.simpleName}",
-                inputSchema = Tool.Input(),
+                name = toToolName(eventReference.eventName, model.kClass.simpleName!!),
+                description = "Executes the ${eventReference.eventName} command on the data ${model.kClass.simpleName}",
+//                inputSchema = Tool.Input(properties, required),
             ) { request ->
                 println("Request = $request")
                 CallToolResult(
@@ -112,4 +108,13 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
 //            )
 //        }
 //    }
+}
+
+private fun toToolName(eventName: String, modelName: String): String {
+     fun toSnakeCase(camelCase: String): String {
+        return camelCase.replace(Regex("([a-z])([A-Z])"), "$1_$2")
+            .replace(Regex("([A-Z])([A-Z][a-z])"), "$1_$2")
+            .lowercase()
+    }
+    return "${toSnakeCase(modelName)}_${toSnakeCase(eventName)}"
 }
