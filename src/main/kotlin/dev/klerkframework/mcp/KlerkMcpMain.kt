@@ -152,21 +152,34 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
                     val containerConstructor = paramType.constructors.firstOrNull()
                         ?: throw IllegalStateException("No constructor found for parameter type $paramType")
 
+                    // Get the first parameter of the constructor to determine what type it expects
+                    val constructorFirstParam = containerConstructor.parameters.firstOrNull()
+                        ?: throw IllegalStateException("Constructor for $paramType has no parameters")
+
+                    val parameterType = constructorFirstParam.type.classifier
+
                     // Create an instance of the DataContainer subclass with the value from the request
-                    val containerInstance = when {
-                        // Handle different primitive types
-                        requestParamValue is JsonPrimitive && paramType.simpleName?.contains("String", ignoreCase = true) == true -> {
-                            containerConstructor.call(requestParamValue)
+                    val containerInstance = when (parameterType) {
+                        String::class -> {
+                            containerConstructor.call(requestParamValue.toString())
                         }
-                        requestParamValue is JsonPrimitive && paramType.simpleName?.contains("Int", ignoreCase = true) == true -> {
-                            containerConstructor.call(requestParamValue.toString().toInt())
+                        Int::class -> {
+                            val intValue = when (requestParamValue) {
+                                is JsonPrimitive -> requestParamValue.toString().toIntOrNull() ?: 0
+                                else -> requestParamValue.toString().toIntOrNull() ?: 0
+                            }
+                            containerConstructor.call(intValue)
                         }
-                        requestParamValue is JsonPrimitive && paramType.simpleName?.contains("Boolean", ignoreCase = true) == true -> {
-                            containerConstructor.call(requestParamValue)
+                        Boolean::class -> {
+                            val boolValue = when (requestParamValue) {
+                                is JsonPrimitive -> requestParamValue.toString().toBoolean()
+                                else -> requestParamValue.toString().toBoolean()
+                            }
+                            containerConstructor.call(boolValue)
                         }
-                        // Add more type conversions as needed
                         else -> {
-                            // Try to convert string to appropriate type
+                            // Fallback for other types
+                            logger.warn("Using fallback for parameter type: {}", parameterType)
                             when {
                                 paramType.simpleName?.contains("Int", ignoreCase = true) == true -> {
                                     containerConstructor.call(requestParamValue.toString().toIntOrNull() ?: 0)
@@ -178,9 +191,7 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
                                     containerConstructor.call(requestParamValue.toString().toBoolean())
                                 }
                                 else -> {
-                                    throw IllegalArgumentException("Unsupported parameter type: $paramType")
-                                    logger.warn("Unsupported parameter type: {}", paramType)
-                                    null
+                                    throw IllegalArgumentException("Unsupported parameter type: $paramType with constructor parameter type: $parameterType")
                                 }
                             }
                         }
@@ -198,7 +209,7 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
             val paramsInstance = constructor.callBy(paramValues)
 
             // Create a context for the command
-            val context = klerk.config.contextProvider!!(SystemIdentity)
+            val context = klerk.config.contextProvider!!(SystemIdentity) // TODO better authentication is needed
 
             // Create and execute the command
             @Suppress("UNCHECKED_CAST")
