@@ -5,6 +5,7 @@ import dev.klerkframework.klerk.KlerkContext
 import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
+import org.slf4j.LoggerFactory
 
 //fun configureMcpServer(): Routing.() -> Unit = {
 //    mcp {
@@ -12,8 +13,10 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 //    }
 //}
 
+private val logger = LoggerFactory.getLogger("dev.klerkframework.mcp.KlerkMcpMain")
+
 fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
-    println("Test1")
+    logger.info("Creating MCP server")
     return Server(
         serverInfo = Implementation(
             name = "example-sse-server",
