@@ -2,9 +2,11 @@ package dev.klerkframework.mcp
 
 import dev.klerkframework.klerk.Klerk
 import dev.klerkframework.klerk.KlerkContext
+import dev.klerkframework.klerk.misc.extractNameFromFunction
 import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
+import kotlinx.serialization.json.JsonObject
 import org.slf4j.LoggerFactory
 
 //fun configureMcpServer(): Routing.() -> Unit = {
@@ -17,7 +19,8 @@ private val logger = LoggerFactory.getLogger("dev.klerkframework.mcp.KlerkMcpMai
 
 fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
     logger.info("Creating MCP server")
-    return Server(
+
+    val server = Server(
         serverInfo = Implementation(
             name = "example-sse-server",
             version = "1.0.0"
@@ -29,16 +32,84 @@ fun <C : KlerkContext, V> createMcpServer(klerk: Klerk<C, V>): Server {
                 tools = ServerCapabilities.Tools(listChanged = null),
             )
         )
-    ).apply {
-        // Add a tool
-        this.addTool(
-            name = "kotlin-sdk-tool",
-            description = "My test tool",
-            inputSchema = Tool.Input()
-        ) { request ->
-            CallToolResult(
-                content = listOf(TextContent("Hello, world!"))
-            )
+    )
+
+    for (model in klerk.config.managedModels) {
+//        println(model)
+        val stateMachine = model.stateMachine
+
+        stateMachine.getExternalEvents().forEach { eventReference ->
+            if (eventReference.eventName != "CreateTodo") {
+                return@forEach
+            }
+
+            val properties: JsonObject
+            val required: List<String>?
+
+
+            println("${model.kClass.simpleName}: ${eventReference.eventName}")
+            val event = klerk.config.getEvent(eventReference)
+            val parameters = klerk.config.getParameters(eventReference)
+            if (parameters != null) {
+                val requiredParameters = parameters.requiredParameters
+                for (parameter in requiredParameters) {
+                    println("Required parameter = ${parameter.name}")
+                }
+                val optionalParameters = parameters.optionalParameters
+                for (parameter in optionalParameters) {
+                    println("Optional parameter = ${parameter.name}")
+                }
+
+//                println("requiredParameters = $requiredParameters")
+//                println("optionalParameters = $optionalParameters")
+            }
+
+            server.addTool(
+                name = "${eventReference.eventName}",
+                description = "Executes the ${eventReference.eventName} on the data ${model.kClass.simpleName}",
+                inputSchema = Tool.Input(),
+            ) { request ->
+                println("Request = $request")
+                CallToolResult(
+                    content = listOf(TextContent("Hello, world!"))
+                )
+            }
+
         }
+        break
+
+//        stateMachine.instanceStates.forEach { state ->
+//            println(state.name)
+//            state.onEventBlocks.forEach { eventBlock ->
+//                println(eventBlock.first.name)
+//                eventBlock.second.executables
+//                    .filterIsInstance<InstanceEventTransitionWhen<*, *, *, *, *>>()
+//                    .forEach { transition ->
+//                        transition.branches.forEach { branch ->
+//                            result += "${toVariable(state.name)} --> ${toVariable(branch.value.name)}: ${
+//                                extractNameFromFunction(
+//                                    branch.key
+//                                )
+//                            }\n"
+//                        }
+//                    }
+//            }
+//        }
+
     }
+
+
+    return server
+//        .apply {
+//        // Add a tool
+//        this.addTool(
+//            name = "kotlin-sdk-tool",
+//            description = "My test tool",
+//            inputSchema = Tool.Input()
+//        ) { request ->
+//            CallToolResult(
+//                content = listOf(TextContent("Hello, world!"))
+//            )
+//        }
+//    }
 }
