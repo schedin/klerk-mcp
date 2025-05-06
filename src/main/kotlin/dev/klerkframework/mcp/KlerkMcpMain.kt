@@ -6,6 +6,7 @@ import dev.klerkframework.klerk.CommandResult.Success
 import dev.klerkframework.klerk.command.Command
 import dev.klerkframework.klerk.command.CommandToken
 import dev.klerkframework.klerk.command.ProcessingOptions
+import dev.klerkframework.klerk.datatypes.DataContainer
 import dev.klerkframework.klerk.misc.PropertyType
 import dev.klerkframework.klerk.statemachine.StateMachine
 import io.modelcontextprotocol.kotlin.sdk.*
@@ -237,7 +238,7 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
  * Converts a Klerk model to a JsonObject to return to the MCP client
  */
 fun modelToJson(model: Model<*>): JsonObject {
-    val propsList = mutableListOf<JsonPrimitive>()
+    val propsMap: MutableMap<String, JsonElement> = mutableMapOf()
 
     // Use reflection to get all properties from model.props
     val propsObj = model.props
@@ -255,22 +256,22 @@ fun modelToJson(model: Model<*>): JsonObject {
                 // Handle different property types
                 when (value) {
                     // Handle DataContainer types which have a 'value' property
-                    is dev.klerkframework.klerk.datatypes.DataContainer<*> -> {
-                        propsList.add(JsonPrimitive("${member.name}:${value.value}"))
+                    is DataContainer<*> -> {
+                        propsMap[member.name] = JsonPrimitive(value.toString())
                     }
                     // Handle ModelID
-                    is dev.klerkframework.klerk.ModelID<*> -> {
-                        propsList.add(JsonPrimitive("${member.name}:${value}"))
+                    is ModelID<*> -> {
+                        propsMap[member.name] = JsonPrimitive(value.toString())
                     }
                     // Handle other primitive types
                     is String, is Int, is Boolean, is Long, is Float, is Double -> {
-                        propsList.add(JsonPrimitive("${member.name}:${value}"))
+                        propsMap[member.name] = JsonPrimitive(value.toString())
                     }
                     // Skip null values
                     null -> {}
                     // For other types, use toString()
                     else -> {
-                        propsList.add(JsonPrimitive("${member.name}:${value}"))
+                        throw IllegalArgumentException("Unsupported property type: ${value::class}")
                     }
                 }
             } catch (e: Exception) {
@@ -283,6 +284,6 @@ fun modelToJson(model: Model<*>): JsonObject {
     return buildJsonObject {
         put("id", JsonPrimitive(model.id.toString()))
         put("state", JsonPrimitive((model.state)))
-        put("props", JsonArray(propsList))
+        put("props", JsonObject(propsMap))
     }
 }
