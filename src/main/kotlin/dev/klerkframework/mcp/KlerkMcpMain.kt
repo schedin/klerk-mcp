@@ -7,14 +7,11 @@ import dev.klerkframework.klerk.command.Command
 import dev.klerkframework.klerk.command.CommandToken
 import dev.klerkframework.klerk.command.ProcessingOptions
 import dev.klerkframework.klerk.misc.PropertyType
-import dev.klerkframework.klerk.misc.extractNameFromFunction
 import dev.klerkframework.klerk.statemachine.StateMachine
-import io.ktor.http.*
-import io.ktor.server.response.*
 import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
-import kotlinx.serialization.json.JsonObject
+
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonObject
@@ -113,7 +110,7 @@ fun toToolName(eventName: String, modelName: String): String {
     return "${toSnakeCase(modelName)}_${toSnakeCase(eventName)}"
 }
 
-private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handleToolRequest(
+private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handleToolRequest(
     stateMachine: StateMachine<T, ModelStates, C, V>,
     klerk: Klerk<C, V>,
     event: Event<Any, Any?>,
@@ -152,6 +149,10 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
                 val requestParamValue = request.arguments[paramName]
 
                 if (requestParamValue != null) {
+                    if (requestParamValue !is JsonPrimitive) {
+                        throw IllegalArgumentException("Unknown JSON class ${requestParamValue.javaClass.simpleName}")
+                    }
+
                     // Find the constructor of the parameter type (which should be a DataContainer subclass)
                     val containerConstructor = paramType.constructors.firstOrNull()
                         ?: throw IllegalStateException("No constructor found for parameter type $paramType")
@@ -165,39 +166,19 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V,> handl
                     // Create an instance of the DataContainer subclass with the value from the request
                     val containerInstance = when (parameterType) {
                         String::class -> {
-                            containerConstructor.call(requestParamValue.toString())
+                            containerConstructor.call(requestParamValue.content)
                         }
                         Int::class -> {
-                            val intValue = when (requestParamValue) {
-                                is JsonPrimitive -> requestParamValue.toString().toIntOrNull() ?: 0
-                                else -> requestParamValue.toString().toIntOrNull() ?: 0
-                            }
+                            val intValue = requestParamValue.content.toInt()
                             containerConstructor.call(intValue)
                         }
                         Boolean::class -> {
-                            val boolValue = when (requestParamValue) {
-                                is JsonPrimitive -> requestParamValue.toString().toBoolean()
-                                else -> requestParamValue.toString().toBoolean()
-                            }
+                            val boolValue = requestParamValue.content.toBoolean()
                             containerConstructor.call(boolValue)
                         }
                         else -> {
-                            // Fallback for other types
-                            logger.warn("Using fallback for parameter type: {}", parameterType)
-                            when {
-                                paramType.simpleName?.contains("Int", ignoreCase = true) == true -> {
-                                    containerConstructor.call(requestParamValue.toString().toIntOrNull() ?: 0)
-                                }
-                                paramType.simpleName?.contains("String", ignoreCase = true) == true -> {
-                                    containerConstructor.call(requestParamValue.toString())
-                                }
-                                paramType.simpleName?.contains("Boolean", ignoreCase = true) == true -> {
-                                    containerConstructor.call(requestParamValue.toString().toBoolean())
-                                }
-                                else -> {
-                                    throw IllegalArgumentException("Unsupported parameter type: $paramType with constructor parameter type: $parameterType")
-                                }
-                            }
+//                            logger.warn("Using fallback for parameter type: {}", parameterType)
+                            throw IllegalArgumentException("Unsupported parameter type: $paramType with constructor parameter type: $parameterType")
                         }
                     }
 
