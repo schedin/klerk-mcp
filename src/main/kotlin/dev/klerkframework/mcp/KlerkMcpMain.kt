@@ -12,10 +12,8 @@ import io.modelcontextprotocol.kotlin.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.putJsonObject
 import io.modelcontextprotocol.kotlin.sdk.Tool
+import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
 
 //fun configureMcpServer(): Routing.() -> Unit = {
@@ -145,7 +143,7 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
                 val paramName = param.name ?: continue
                 val paramType = param.type.classifier as? kotlin.reflect.KClass<*> ?: continue
                 val requestParamValue = request.arguments[paramName]
-                    ?: throw IllegalArgumentException("Missing parameter for tool call ${request}: $paramName")
+                    ?: throw IllegalArgumentException("Missing parameter for tool call ${request.name}: $paramName")
 
                 if (requestParamValue !is JsonPrimitive) {
                     throw IllegalArgumentException("Unknown JSON class ${requestParamValue.javaClass.simpleName}")
@@ -208,7 +206,10 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
                     if (modelId != null) {
                         val model = klerk.read(context) { get(modelId) }
                         return CallToolResult(
-                            content = listOf(TextContent("Successfully created: $model"))
+                            content = listOf(
+                                TextContent("Successfully executed tool ${request.name}"),
+                                TextContent(modelToJson(model).toString()),
+                            )
                         )
                     } else {
                         return CallToolResult(
@@ -217,7 +218,6 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
                     }
                 }
             }
-
         } catch (e: Exception) {
             logger.error("Error instantiating parameters class: {}", e.message, e)
             return CallToolResult(
@@ -231,4 +231,58 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
     return CallToolResult(
         content = listOf(TextContent("Request processed but no action was taken"))
     )
+}
+
+/**
+ * Converts a Klerk model to a JsonObject to return to the MCP client
+ */
+fun modelToJson(model: Model<*>): JsonObject {
+    val propsList = mutableListOf<JsonPrimitive>()
+
+    // Use reflection to get all properties from model.props
+    val propsObj = model.props
+    val propsClass = propsObj::class
+
+    // Get all properties from the model.props object
+    propsClass.members.forEach { member ->
+        if (member is kotlin.reflect.KProperty1<*, *>) {
+            try {
+                // Cast to KProperty1<Any, *> to be able to get the value
+                @Suppress("UNCHECKED_CAST")
+                val prop = member as kotlin.reflect.KProperty1<Any, *>
+                val value = prop.get(propsObj)
+
+                // Handle different property types
+                when (value) {
+                    // Handle DataContainer types which have a 'value' property
+                    is dev.klerkframework.klerk.datatypes.DataContainer<*> -> {
+                        propsList.add(JsonPrimitive("${member.name}:${value.value}"))
+                    }
+                    // Handle ModelID
+                    is dev.klerkframework.klerk.ModelID<*> -> {
+                        propsList.add(JsonPrimitive("${member.name}:${value}"))
+                    }
+                    // Handle other primitive types
+                    is String, is Int, is Boolean, is Long, is Float, is Double -> {
+                        propsList.add(JsonPrimitive("${member.name}:${value}"))
+                    }
+                    // Skip null values
+                    null -> {}
+                    // For other types, use toString()
+                    else -> {
+                        propsList.add(JsonPrimitive("${member.name}:${value}"))
+                    }
+                }
+            } catch (e: Exception) {
+                // Log the error but continue processing other properties
+                logger.error("Error processing property ${member.name}: ${e.message}")
+            }
+        }
+    }
+
+    return buildJsonObject {
+        put("id", JsonPrimitive(model.id.toString()))
+        put("state", JsonPrimitive((model.state)))
+        put("props", JsonArray(propsList))
+    }
 }
