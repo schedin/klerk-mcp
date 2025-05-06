@@ -20,9 +20,7 @@ dependencies {
 
     implementation("io.modelcontextprotocol:kotlin-sdk:${property("mcp_sdk_version")}") // MCP SDK
 
-    // Logging
     implementation("org.slf4j:slf4j-api:${property("slf4j_version")}")
-    implementation("ch.qos.logback:logback-classic:${property("logback_version")}")
 
     // Testing
     testImplementation(kotlin("test"))
