@@ -28,13 +28,15 @@ private val logger = LoggerFactory.getLogger("dev.klerkframework.mcp.KlerkMcpMai
 fun <C : KlerkContext, V> createMcpServer(
     klerk: Klerk<C, V>,
     contextProvider: suspend () -> C,
+    mcpServerName: String,
+    mcpServerVersion: String,
 ): Server {
     logger.info("Creating MCP server")
 
     val server = Server(
         serverInfo = Implementation(
-            name = "example-sse-server",
-            version = "1.0.0"
+            name = mcpServerName,
+            version = mcpServerVersion
         ),
         options = ServerOptions(
             capabilities = ServerCapabilities(
