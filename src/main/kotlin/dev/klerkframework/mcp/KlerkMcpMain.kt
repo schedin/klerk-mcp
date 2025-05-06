@@ -51,30 +51,41 @@ fun <C : KlerkContext, V> createMcpServer(
         val stateMachine = model.stateMachine
 
         stateMachine.getExternalEvents().forEach { eventReference ->
-            if (eventReference.eventName != "CreateTodo") {
-                return@forEach
-            }
+//            if (/* eventReference.eventName != "CreateTodo" && */ eventReference.eventName != "MarkComplete") {
+//                return@forEach
+//            }
             println("${model.kClass.simpleName}: ${eventReference.eventName}")
 
-//            val event = klerk.config.getEvent(eventReference)
+            val event = klerk.config.getEvent(eventReference)
+            println(event)
 //            val inputSchema
 //            val parameters = klerk.config.getParameters(eventReference)
+            val required: MutableList<String> = mutableListOf()
+            val properties: MutableMap<String, JsonElement> = mutableMapOf()
 
-            val inputSchema: Tool.Input = klerk.config.getParameters(eventReference)?.let { parameters ->
-                val required = parameters.requiredParameters.map { it.name }
-                    .takeUnless { it.isEmpty() }
-                val properties = buildJsonObject {
-                    parameters.all.forEach { eventParameter ->
-                        putJsonObject(eventParameter.name) {
-                            put("type", JsonPrimitive(propertyTypeToJsonType(eventParameter.type)))
-                            put("description", JsonPrimitive("Value for the ${eventParameter.valueClass.simpleName}"))
-                        }
-                    }
+            if (event is InstanceEvent) {
+                required.add("modelID")
+                properties["modelID"] = JsonObject(mapOf(
+                        "type" to JsonPrimitive("string"),
+                        "description" to JsonPrimitive("Model ID of the instance to execute the command on"),
+                    )
+                )
+            }
+
+            klerk.config.getParameters(eventReference)?.also { parameters ->
+                required.addAll(parameters.requiredParameters.map { it.name })
+                parameters.all.forEach { eventParameter ->
+                    properties[eventParameter.name] = JsonObject(
+                        mapOf(
+                            "type" to JsonPrimitive(propertyTypeToJsonType(eventParameter.type)),
+                            "description" to JsonPrimitive("Value for the ${eventParameter.valueClass.simpleName}"),
+                        )
+                    )
                 }
-                logger.debug("Tool input properties: {}", properties)
-                Tool.Input(properties, required)
-            } ?: Tool.Input()
+            }
 
+            logger.debug("Tool input properties for ${eventReference.eventName}: {}", properties)
+            val inputSchema = Tool.Input(JsonObject(properties), required)
             server.addTool(
                 name = toToolName(eventReference.eventName, model.kClass.simpleName!!),
                 description = "Executes the ${eventReference.eventName} command on the data ${model.kClass.simpleName}",
