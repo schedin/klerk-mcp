@@ -25,6 +25,11 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("dev.klerkframework.mcp.KlerkMcpMain")
 
+/**
+ * The name of the JSON parameter that contains the model ID. All InstanceEvent:s require this parameter.
+ */
+private const val MODEL_ID_JSON_PARAMETER = "modelID"
+
 fun <C : KlerkContext, V> createMcpServer(
     klerk: Klerk<C, V>,
     contextProvider: suspend () -> C,
@@ -64,15 +69,15 @@ fun <C : KlerkContext, V> createMcpServer(
             val properties: MutableMap<String, JsonElement> = mutableMapOf()
 
             if (event is InstanceEvent) {
-                required.add("modelID")
-                properties["modelID"] = JsonObject(mapOf(
+                required.add(MODEL_ID_JSON_PARAMETER)
+                properties[MODEL_ID_JSON_PARAMETER] = JsonObject(mapOf(
                         "type" to JsonPrimitive("string"),
                         "description" to JsonPrimitive("Model ID of the instance to execute the command on"),
                     )
                 )
             }
 
-            klerk.config.getParameters(eventReference)?.also { parameters ->
+            klerk.config.getParameters(eventReference)?.let { parameters ->
                 required.addAll(parameters.requiredParameters.map { it.name })
                 parameters.all.forEach { eventParameter ->
                     properties[eventParameter.name] = JsonObject(
@@ -122,6 +127,75 @@ fun toToolName(eventName: String, modelName: String): String {
     return "${toSnakeCase(modelName)}_${toSnakeCase(eventName)}"
 }
 
+/**
+ * Build a Command params instance using the request arguments from the MCP client.
+ * @return The created Command params instance, or null if the event has no parameters.
+ */
+private fun createCommandParams(event: Event<Any, Any?>, request: CallToolRequest): Any? {
+    val parametersClass = when(event) {
+        is VoidEventWithParameters -> event.parametersClass
+        is InstanceEventWithParameters -> event.parametersClass
+        else -> return null
+    }
+
+    logger.debug("Parameters class: {}", parametersClass)
+    try {
+        // Get the constructor of the parameters class
+        val constructor = parametersClass.constructors.firstOrNull()
+            ?: throw IllegalStateException("No constructor found for $parametersClass")
+
+        // Get constructor parameters
+        val constructorParams = constructor.parameters
+
+        // Create a map to hold the parameter values we'll pass to the constructor
+        val paramValues = mutableMapOf<kotlin.reflect.KParameter, Any>()
+
+        // Process each constructor parameter
+        for (param in constructorParams) {
+            val paramName = param.name ?: continue
+            val paramType = param.type.classifier as? kotlin.reflect.KClass<*> ?: continue
+            val requestParamValue = request.arguments[paramName]
+                ?: throw IllegalArgumentException("Missing parameter for tool call ${request.name}: $paramName")
+
+            if (requestParamValue !is JsonPrimitive) {
+                throw IllegalArgumentException("Unknown JSON class ${requestParamValue.javaClass.simpleName}")
+            }
+
+            // Find the constructor of the parameter type (which should be a DataContainer subclass)
+            val containerConstructor = paramType.constructors.firstOrNull()
+                ?: throw IllegalStateException("No constructor found for parameter type $paramType")
+
+            // Get the first parameter of the constructor to determine what type it expects
+            val constructorFirstParam = containerConstructor.parameters.firstOrNull()
+                ?: throw IllegalStateException("Constructor for $paramType has no parameters")
+
+            // Create an instance of the DataContainer subclass with the value from the request
+            val containerInstance = when (val parameterType = constructorFirstParam.type.classifier) {
+                String::class -> {
+                    containerConstructor.call(requestParamValue.content)
+                }
+                Int::class -> {
+                    val intValue = requestParamValue.content.toInt()
+                    containerConstructor.call(intValue)
+                }
+                Boolean::class -> {
+                    val boolValue = requestParamValue.content.toBoolean()
+                    containerConstructor.call(boolValue)
+                }
+                else -> {
+                    throw IllegalArgumentException("Unsupported parameter type: $paramType with constructor parameter type: $parameterType")
+                }
+            }
+            paramValues[param] = containerInstance
+        }
+
+        // Create an instance of the parameters class with the constructed parameter values
+        return constructor.callBy(paramValues)
+    } catch (e: Exception) {
+        throw IllegalArgumentException("Error instantiating parameters class: ${parametersClass.simpleName}", e)
+    }
+}
+
 private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handleToolRequest(
     stateMachine: StateMachine<T, ModelStates, C, V>,
     klerk: Klerk<C, V>,
@@ -132,119 +206,52 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
     logger.debug("Handling tool request for event: {}", event)
     logger.debug("State machine: {}", stateMachine)
 
-    val parametersClass = when(event) {
-        is VoidEventWithParameters -> event.parametersClass
-        is InstanceEventWithParameters -> event.parametersClass
-        else -> null
+    val paramsInstance = createCommandParams(event, request)
+
+    val modelIdForCommand: ModelID<T>? = request.arguments[MODEL_ID_JSON_PARAMETER]?.let { modelIdJsonParam ->
+        if (modelIdJsonParam !is JsonPrimitive) {
+            throw IllegalArgumentException("Unknown JSON class ${modelIdJsonParam.javaClass.simpleName}")
+        }
+        ModelID.from(modelIdJsonParam.content)
     }
 
-    if (parametersClass != null) {
-        logger.debug("Parameters class: {}", parametersClass)
+    // Create a context for the command
+    val context = contextProvider()
 
-        try {
-            // Get the constructor of the parameters class
-            val constructor = parametersClass.constructors.firstOrNull()
-                ?: throw IllegalStateException("No constructor found for $parametersClass")
+    // Create and execute the command
+    @Suppress("UNCHECKED_CAST")
+    val command = Command(
+        event = event as Event<T, Any?>,
+        model = modelIdForCommand,
+        params = paramsInstance
+    )
 
-            // Get constructor parameters
-            val constructorParams = constructor.parameters
-
-            // Create a map to hold the parameter values we'll pass to the constructor
-            val paramValues = mutableMapOf<kotlin.reflect.KParameter, Any>()
-
-            // Process each constructor parameter
-            for (param in constructorParams) {
-                val paramName = param.name ?: continue
-                val paramType = param.type.classifier as? kotlin.reflect.KClass<*> ?: continue
-                val requestParamValue = request.arguments[paramName]
-                    ?: throw IllegalArgumentException("Missing parameter for tool call ${request.name}: $paramName")
-
-                if (requestParamValue !is JsonPrimitive) {
-                    throw IllegalArgumentException("Unknown JSON class ${requestParamValue.javaClass.simpleName}")
-                }
-
-                // Find the constructor of the parameter type (which should be a DataContainer subclass)
-                val containerConstructor = paramType.constructors.firstOrNull()
-                    ?: throw IllegalStateException("No constructor found for parameter type $paramType")
-
-                // Get the first parameter of the constructor to determine what type it expects
-                val constructorFirstParam = containerConstructor.parameters.firstOrNull()
-                    ?: throw IllegalStateException("Constructor for $paramType has no parameters")
-
-                // Create an instance of the DataContainer subclass with the value from the request
-                val containerInstance = when (val parameterType = constructorFirstParam.type.classifier) {
-                    String::class -> {
-                        containerConstructor.call(requestParamValue.content)
-                    }
-                    Int::class -> {
-                        val intValue = requestParamValue.content.toInt()
-                        containerConstructor.call(intValue)
-                    }
-                    Boolean::class -> {
-                        val boolValue = requestParamValue.content.toBoolean()
-                        containerConstructor.call(boolValue)
-                    }
-                    else -> {
-//                      logger.warn("Using fallback for parameter type: {}", parameterType)
-                        throw IllegalArgumentException("Unsupported parameter type: $paramType with constructor parameter type: $parameterType")
-                    }
-                }
-                paramValues[param] = containerInstance
-            }
-
-            // Create an instance of the parameters class with the constructed parameter values
-            val paramsInstance = constructor.callBy(paramValues)
-
-            // Create a context for the command
-            val context = contextProvider()
-
-            // Create and execute the command
-            @Suppress("UNCHECKED_CAST")
-            val command = Command(
-                event = event as Event<T, Any?>,
-                model = null,
-                params = paramsInstance
-            )
-
-            // Handle the command
-            when(val result = klerk.handle(command, context, ProcessingOptions(CommandToken.simple()))) {
-                is Failure -> {
-                    logger.error("Command execution failed: {}", result.problem)
-                    return CallToolResult(
-                        content = listOf(TextContent("Error: ${result.problem}"))
-                    )
-                }
-                is Success -> {
-                    logger.info("Command executed successfully")
-                    val modelId = result.primaryModel
-                    if (modelId != null) {
-                        val model = klerk.read(context) { get(modelId) }
-                        return CallToolResult(
-                            content = listOf(
-                                TextContent("Successfully executed tool ${request.name}"),
-                                TextContent(modelToJson(model).toString()),
-                            )
-                        )
-                    } else {
-                        return CallToolResult(
-                            content = listOf(TextContent("Command executed successfully"))
-                        )
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            logger.error("Error instantiating parameters class: {}", e.message, e)
+    // Handle the command
+    when(val result = klerk.handle(command, context, ProcessingOptions(CommandToken.simple()))) {
+        is Failure -> {
+            logger.error("Command execution failed: {}", result.problem)
             return CallToolResult(
-                content = listOf(TextContent("Error: ${e.message}"))
+                content = listOf(TextContent("Error: ${result.problem}"))
             )
         }
-    } else {
-        logger.warn("No parameters class found for event: {}", event)
+        is Success -> {
+            logger.info("Command executed successfully")
+            val modelId = result.primaryModel
+            if (modelId != null) {
+                val model = klerk.read(context) { get(modelId) }
+                return CallToolResult(
+                    content = listOf(
+                        TextContent("Successfully executed tool ${request.name}"),
+                        TextContent(modelToJson(model).toString()),
+                    )
+                )
+            } else {
+                return CallToolResult(
+                    content = listOf(TextContent("Command executed successfully"))
+                )
+            }
+        }
     }
-
-    return CallToolResult(
-        content = listOf(TextContent("Request processed but no action was taken"))
-    )
 }
 
 /**
