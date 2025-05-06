@@ -237,6 +237,14 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
         is Success -> {
             logger.info("Command executed successfully")
             val modelId = result.primaryModel
+
+            if (result.deletedModels.isNotEmpty() && result.deletedModels[0] == result.primaryModel) {
+                // The model was probably deleted.
+                return CallToolResult(
+                    content = listOf(TextContent("Successfully executed tool ${request.name}"))
+                )
+            }
+
             if (modelId != null) {
                 val model = klerk.read(context) { get(modelId) }
                 return CallToolResult(
