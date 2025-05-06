@@ -144,50 +144,40 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
             for (param in constructorParams) {
                 val paramName = param.name ?: continue
                 val paramType = param.type.classifier as? kotlin.reflect.KClass<*> ?: continue
-
-                // Get the value from the request parameters
                 val requestParamValue = request.arguments[paramName]
+                    ?: throw IllegalArgumentException("Missing parameter for tool call ${request}: $paramName")
 
-                if (requestParamValue != null) {
-                    if (requestParamValue !is JsonPrimitive) {
-                        throw IllegalArgumentException("Unknown JSON class ${requestParamValue.javaClass.simpleName}")
-                    }
-
-                    // Find the constructor of the parameter type (which should be a DataContainer subclass)
-                    val containerConstructor = paramType.constructors.firstOrNull()
-                        ?: throw IllegalStateException("No constructor found for parameter type $paramType")
-
-                    // Get the first parameter of the constructor to determine what type it expects
-                    val constructorFirstParam = containerConstructor.parameters.firstOrNull()
-                        ?: throw IllegalStateException("Constructor for $paramType has no parameters")
-
-                    val parameterType = constructorFirstParam.type.classifier
-
-                    // Create an instance of the DataContainer subclass with the value from the request
-                    val containerInstance = when (parameterType) {
-                        String::class -> {
-                            containerConstructor.call(requestParamValue.content)
-                        }
-                        Int::class -> {
-                            val intValue = requestParamValue.content.toInt()
-                            containerConstructor.call(intValue)
-                        }
-                        Boolean::class -> {
-                            val boolValue = requestParamValue.content.toBoolean()
-                            containerConstructor.call(boolValue)
-                        }
-                        else -> {
-//                            logger.warn("Using fallback for parameter type: {}", parameterType)
-                            throw IllegalArgumentException("Unsupported parameter type: $paramType with constructor parameter type: $parameterType")
-                        }
-                    }
-
-                    if (containerInstance != null) {
-                        paramValues[param] = containerInstance
-                    }
-                } else {
-                    logger.warn("No value provided for parameter: {}", paramName)
+                if (requestParamValue !is JsonPrimitive) {
+                    throw IllegalArgumentException("Unknown JSON class ${requestParamValue.javaClass.simpleName}")
                 }
+
+                // Find the constructor of the parameter type (which should be a DataContainer subclass)
+                val containerConstructor = paramType.constructors.firstOrNull()
+                    ?: throw IllegalStateException("No constructor found for parameter type $paramType")
+
+                // Get the first parameter of the constructor to determine what type it expects
+                val constructorFirstParam = containerConstructor.parameters.firstOrNull()
+                    ?: throw IllegalStateException("Constructor for $paramType has no parameters")
+
+                // Create an instance of the DataContainer subclass with the value from the request
+                val containerInstance = when (val parameterType = constructorFirstParam.type.classifier) {
+                    String::class -> {
+                        containerConstructor.call(requestParamValue.content)
+                    }
+                    Int::class -> {
+                        val intValue = requestParamValue.content.toInt()
+                        containerConstructor.call(intValue)
+                    }
+                    Boolean::class -> {
+                        val boolValue = requestParamValue.content.toBoolean()
+                        containerConstructor.call(boolValue)
+                    }
+                    else -> {
+//                      logger.warn("Using fallback for parameter type: {}", parameterType)
+                        throw IllegalArgumentException("Unsupported parameter type: $paramType with constructor parameter type: $parameterType")
+                    }
+                }
+                paramValues[param] = containerInstance
             }
 
             // Create an instance of the parameters class with the constructed parameter values
