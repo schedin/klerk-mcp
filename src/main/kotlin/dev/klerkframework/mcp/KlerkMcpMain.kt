@@ -45,7 +45,7 @@ fun <C : KlerkContext, V> createMcpServer(
         ),
         options = ServerOptions(
             capabilities = ServerCapabilities(
-                prompts = ServerCapabilities.Prompts(listChanged = null),
+//                prompts = ServerCapabilities.Prompts(listChanged = null),
                 resources = ServerCapabilities.Resources(subscribe = null, listChanged = null),
                 tools = ServerCapabilities.Tools(listChanged = null),
             )
@@ -99,7 +99,46 @@ fun <C : KlerkContext, V> createMcpServer(
                 handleToolRequest(stateMachine, klerk, klerk.config.getEvent(eventReference), contextProvider, request)
             }
        }
-        break
+
+        // Add MCP resources for listing a model. The support for MCP resources in MCP clients are current limited.
+        server.addResource(
+            uri = "${model.kClass.simpleName}s://all",
+            name = "List all ${model.kClass.simpleName}s",
+            description = "A list of ${model.kClass.simpleName}s in JSON format",
+            mimeType = "application/json",
+        ) { request ->
+            val models = klerk.read(contextProvider()) {
+                listIfAuthorized(model.collections.all)
+            }
+
+            val jsonArray = buildJsonArray {
+                for (model in models) {
+                    add(modelToJson(model))
+                }
+            }
+            ReadResourceResult(
+                contents = listOf(
+                    TextResourceContents(jsonArray.toString(), request.uri, "application/json")
+                )
+            )
+        }
+
+        server.addTool(
+            name = "${toSnakeCase(model.kClass.simpleName!!)}_list",
+            description = "Lists all ${model.kClass.simpleName!!} models",
+//            inputSchema = inputSchema,
+        ) { request ->
+            val models = klerk.read(contextProvider()) {
+                listIfAuthorized(model.collections.all)
+            }
+
+            val jsonArray = buildJsonArray {
+                for (model in models) {
+                    add(modelToJson(model))
+                }
+            }
+            CallToolResult(content = listOf(TextContent(jsonArray.toString())))
+        }
     }
 
     return server
@@ -118,12 +157,13 @@ fun propertyTypeToJsonType(propertyType: PropertyType?): String {
     }
 }
 
+fun toSnakeCase(camelCase: String): String {
+    return camelCase.replace(Regex("([a-z])([A-Z])"), "$1_$2")
+        .replace(Regex("([A-Z])([A-Z][a-z])"), "$1_$2")
+        .lowercase()
+}
+
 fun toToolName(eventName: String, modelName: String): String {
-     fun toSnakeCase(camelCase: String): String {
-        return camelCase.replace(Regex("([a-z])([A-Z])"), "$1_$2")
-            .replace(Regex("([A-Z])([A-Z][a-z])"), "$1_$2")
-            .lowercase()
-    }
     return "${toSnakeCase(modelName)}_${toSnakeCase(eventName)}"
 }
 
