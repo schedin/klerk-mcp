@@ -112,10 +112,9 @@ fun <C : KlerkContext, V> createMcpServer(
             }
 
             val jsonArray = buildJsonArray {
-                for (model in models) {
-                    add(modelToJson(model))
-                }
+                models.map { modelToJson(it) }.forEach { add(it) }
             }
+
             ReadResourceResult(
                 contents = listOf(
                     TextResourceContents(jsonArray.toString(), request.uri, "application/json")
@@ -133,9 +132,7 @@ fun <C : KlerkContext, V> createMcpServer(
             }
 
             val jsonArray = buildJsonArray {
-                for (model in models) {
-                    add(modelToJson(model))
-                }
+                models.map { modelToJson(it) }.forEach { add(it) }
             }
             CallToolResult(content = listOf(TextContent(jsonArray.toString())))
         }
