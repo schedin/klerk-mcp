@@ -53,7 +53,6 @@ fun <C : KlerkContext, V> createMcpServer(
         ),
         options = ServerOptions(
             capabilities = ServerCapabilities(
-//                prompts = ServerCapabilities.Prompts(listChanged = null),
                 resources = ServerCapabilities.Resources(subscribe = null, listChanged = null),
                 tools = ServerCapabilities.Tools(listChanged = null),
             )
@@ -64,15 +63,10 @@ fun <C : KlerkContext, V> createMcpServer(
         val stateMachine = model.stateMachine
 
         stateMachine.getExternalEvents().forEach { eventReference ->
-//            if (/* eventReference.eventName != "CreateTodo" && */ eventReference.eventName != "MarkComplete") {
-//                return@forEach
-//            }
-            println("${model.kClass.simpleName}: ${eventReference.eventName}")
+            logger.debug("Adding tool for model {} and event: {}",model.kClass.simpleName, eventReference.eventName)
 
             val event = klerk.config.getEvent(eventReference)
-            println(event)
-//            val inputSchema
-//            val parameters = klerk.config.getParameters(eventReference)
+
             val required: MutableList<String> = mutableListOf()
             val properties: MutableMap<String, JsonElement> = mutableMapOf()
 
@@ -130,10 +124,10 @@ fun <C : KlerkContext, V> createMcpServer(
             )
         }
 
+        // Because MCP clients support for resources are limited, it more compatible to add a tool for listing models.
         server.addTool(
             name = "${toSnakeCase(model.kClass.simpleName!!)}_list",
             description = "Lists all ${model.kClass.simpleName!!} models",
-//            inputSchema = inputSchema,
         ) { request ->
             val models = klerk.read(contextProvider()) {
                 listIfAuthorized(model.collections.all)
