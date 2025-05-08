@@ -202,7 +202,6 @@ private fun createCommandParams(event: Event<Any, Any?>, request: CallToolReques
 
             // Handle ModelID parameters
             if (paramType == ModelID::class) {
-                @Suppress("UNCHECKED_CAST")
                 paramValues[param] = ModelID.from<Any>(requestParamValue.content) as Any
                 continue
             }
