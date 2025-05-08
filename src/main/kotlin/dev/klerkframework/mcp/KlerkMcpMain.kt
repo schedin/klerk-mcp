@@ -16,8 +16,6 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.Tool
 import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
-import kotlin.reflect.KCallable
-import kotlin.reflect.KProperty1
 
 /**
  * A function that provides a context for executing commands.
@@ -359,9 +357,9 @@ private fun propertyToJson(
         is String, is Int, is Boolean, is Long, is Float, is Double -> {
             JsonPrimitive(value.toString())
         }
-        is List<*> -> {
+        is List<*>, is Set<*> -> {
             buildJsonArray {
-                value.forEach {
+                (value as Iterable<*>).forEach {
                     add(propertyToJson(it))
                 }
             }
