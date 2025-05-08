@@ -16,14 +16,17 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.Tool
 import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
+import kotlin.reflect.KCallable
+import kotlin.reflect.KProperty1
 
 /**
  * A function that provides a context for executing commands.
  * This is typically used to create a context based on the current request or user session.
- * 
+ *
  * @param C The type of KlerkContext that will be provided, typically a class named Ctx
+ * @param command The command being executed, or null if no specific command is associated with this context request
  */
-typealias ContextProvider<C> = suspend () -> C
+typealias ContextProvider<C> = suspend (command: Command<*, *>?) -> C
 
 //fun configureMcpServer(): Routing.() -> Unit = {
 //    mcp {
@@ -109,7 +112,7 @@ fun <C : KlerkContext, V> createMcpServer(
             description = "A list of ${model.kClass.simpleName}s in JSON format",
             mimeType = "application/json",
         ) { request ->
-            val models = klerk.read(contextProvider()) {
+            val models = klerk.read(contextProvider(null)) {
                 listIfAuthorized(model.collections.all)
             }
 
@@ -129,7 +132,7 @@ fun <C : KlerkContext, V> createMcpServer(
             name = "${toSnakeCase(model.kClass.simpleName!!)}_list",
             description = "Lists all ${model.kClass.simpleName!!} models",
         ) { request ->
-            val models = klerk.read(contextProvider()) {
+            val models = klerk.read(contextProvider(null)) {
                 listIfAuthorized(model.collections.all)
             }
 
@@ -269,7 +272,7 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
     )
 
     // Create a context for the command
-    val context = contextProvider()
+    val context = contextProvider(command) // todo: fix model
 
     // Handle the command
     when(val result = klerk.handle(command, context, ProcessingOptions(CommandToken.simple()))) {
@@ -324,29 +327,8 @@ fun modelToJson(model: Model<*>): JsonObject {
                 // Cast to KProperty1<Any, *> to be able to get the value
                 @Suppress("UNCHECKED_CAST")
                 val prop = member as kotlin.reflect.KProperty1<Any, *>
-                val value = prop.get(propsObj)
+                propsMap[member.name] = propertyToJson(prop.get(propsObj))
 
-                // Handle different property types
-                when (value) {
-                    // Handle DataContainer types which have a 'value' property
-                    is DataContainer<*> -> {
-                        propsMap[member.name] = JsonPrimitive(value.toString())
-                    }
-                    // Handle ModelID
-                    is ModelID<*> -> {
-                        propsMap[member.name] = JsonPrimitive(value.toString())
-                    }
-                    // Handle other primitive types
-                    is String, is Int, is Boolean, is Long, is Float, is Double -> {
-                        propsMap[member.name] = JsonPrimitive(value.toString())
-                    }
-                    // Skip null values
-                    null -> {}
-                    // For other types, use toString()
-                    else -> {
-                        throw IllegalArgumentException("Unsupported property type: ${value::class}")
-                    }
-                }
             } catch (e: Exception) {
                 // Log the error but continue processing other properties
                 logger.error("Error processing property ${member.name}: ${e.message}")
@@ -358,5 +340,37 @@ fun modelToJson(model: Model<*>): JsonObject {
         put("id", JsonPrimitive(model.id.toString()))
         put("state", JsonPrimitive((model.state)))
         put("props", JsonObject(propsMap))
+    }
+}
+
+private fun propertyToJson(
+    value: Any?,
+) : JsonElement {
+    return when (value) {
+        // Handle DataContainer types which have a 'value' property
+        is DataContainer<*> -> {
+            JsonPrimitive(value.toString())
+        }
+        // Handle ModelID
+        is ModelID<*> -> {
+            JsonPrimitive(value.toString())
+        }
+        // Handle other primitive types
+        is String, is Int, is Boolean, is Long, is Float, is Double -> {
+            JsonPrimitive(value.toString())
+        }
+        is List<*> -> {
+            buildJsonArray {
+                value.forEach {
+                    add(propertyToJson(it))
+                }
+            }
+        }
+        null -> {
+            JsonNull
+        }
+        else -> {
+            throw IllegalArgumentException("Unsupported property type: ${value::class}")
+        }
     }
 }
