@@ -261,9 +261,6 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
         ModelID.from(modelIdJsonParam.content)
     }
 
-    // Create a context for the command
-    val context = contextProvider()
-
     // Create and execute the command
     @Suppress("UNCHECKED_CAST")
     val command = Command(
@@ -271,6 +268,9 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
         model = modelIdForCommand,
         params = paramsInstance
     )
+
+    // Create a context for the command
+    val context = contextProvider()
 
     // Handle the command
     when(val result = klerk.handle(command, context, ProcessingOptions(CommandToken.simple()))) {
