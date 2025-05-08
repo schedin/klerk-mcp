@@ -17,6 +17,14 @@ import io.modelcontextprotocol.kotlin.sdk.Tool
 import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
 
+/**
+ * A function that provides a context for executing commands.
+ * This is typically used to create a context based on the current request or user session.
+ * 
+ * @param C The type of KlerkContext that will be provided, typically a class named Ctx
+ */
+typealias ContextProvider<C> = suspend () -> C
+
 //fun configureMcpServer(): Routing.() -> Unit = {
 //    mcp {
 //        getMcpServer()
@@ -32,7 +40,7 @@ private const val MODEL_ID_JSON_PARAMETER = "modelID"
 
 fun <C : KlerkContext, V> createMcpServer(
     klerk: Klerk<C, V>,
-    contextProvider: suspend () -> C,
+    contextProvider: ContextProvider<C>,
     mcpServerName: String,
     mcpServerVersion: String,
 ): Server {
@@ -72,7 +80,7 @@ fun <C : KlerkContext, V> createMcpServer(
                 required.add(MODEL_ID_JSON_PARAMETER)
                 properties[MODEL_ID_JSON_PARAMETER] = JsonObject(mapOf(
                         "type" to JsonPrimitive("string"),
-                        "description" to JsonPrimitive("Model ID of the instance to execute the command on"),
+                        "description" to JsonPrimitive("Model ID (as base-36 encoded string) of the instance to execute the command on"),
                     )
                 )
             }
@@ -148,7 +156,7 @@ fun propertyTypeToJsonType(propertyType: PropertyType?): String {
         PropertyType.Long ->    "number"
         PropertyType.Float ->   "number"
         PropertyType.Boolean -> "boolean"
-        PropertyType.Ref ->     throw IllegalArgumentException("PropertyType.Ref not yet implemented")
+        PropertyType.Ref ->     "string"
         PropertyType.Enum ->    throw IllegalArgumentException("PropertyType.Enum not yet implemented")
         null -> throw IllegalArgumentException("PropertyType was null!?")
     }
@@ -198,6 +206,13 @@ private fun createCommandParams(event: Event<Any, Any?>, request: CallToolReques
                 throw IllegalArgumentException("Unknown JSON class ${requestParamValue.javaClass.simpleName}")
             }
 
+            // Handle ModelID parameters
+            if (paramType == ModelID::class) {
+                @Suppress("UNCHECKED_CAST")
+                paramValues[param] = ModelID.from<Any>(requestParamValue.content) as Any
+                continue
+            }
+
             // Find the constructor of the parameter type (which should be a DataContainer subclass)
             val containerConstructor = paramType.constructors.firstOrNull()
                 ?: throw IllegalStateException("No constructor found for parameter type $paramType")
@@ -237,7 +252,7 @@ private suspend fun <T : Any, ModelStates : Enum<*>, C : KlerkContext, V> handle
     stateMachine: StateMachine<T, ModelStates, C, V>,
     klerk: Klerk<C, V>,
     event: Event<Any, Any?>,
-    contextProvider: suspend () -> C,
+    contextProvider: ContextProvider<C>,
     request: CallToolRequest,
 ): CallToolResult {
     logger.debug("Handling tool request for event: {}", event)
